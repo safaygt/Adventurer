@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum BudgetType {
+  BUDGET
+  MODERATE
+  LUXURY
+}
+
+enum StopType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SIGHTSEEING
+  SHOPPING
+  ACTIVITY
+  REST
+  OTHER
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+/// User model - Adventurer uygulamasının kullanıcılarını temsil eder
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  avatar    String?
+  
+  /// Kullanıcının oluşturduğu rotalar
+  routes    Route[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Route model - Kullanıcı tarafından oluşturulan seyahat rotası
+model Route {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String?
+  city        String
+  
+  /// Seyahat tarihleri
+  startDate   DateTime
+  endDate     DateTime
+  
+  /// Bütçe tipi
+  budgetType  BudgetType  @default(MODERATE)
+  
+  /// Rota içerisindeki duraklar
+  stops       Stop[]
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  @@index([userId])
+}
+
+/// Stop model - Rotanın içindeki AI tarafından önerilen duraklar
+model Stop {
+  id          String    @id @default(cuid())
+  routeId     String
+  route       Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  
+  /// Durak sırası
+  order       Int
+  
+  /// Durak türü
+  type        StopType
+  
+  /// Durak adı ve açıklaması
+  name        String
+  description String?
+  
+  /// Konum bilgileri
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  
+  /// Durak süresi (dakika cinsinden)
+  duration    Int?
+  
+  /// Tahmini maliyet
+  estimatedCost Float?
+  
+  /// Ek notlar
+  notes       String?
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([routeId])
+  @@index([order])
+}
