@@ -24,7 +24,9 @@ export class GeminiAIService {
     }
 
     this.client = new GoogleGenerativeAI(apiKey);
-    this.model = this.client.getGenerativeModel({ model: 'gemini-pro' });
+    this.model = this.client.getGenerativeModel({ 
+      model: 'gemini-3-flash-preview'
+    });
   }
 
   /**
@@ -78,6 +80,7 @@ KURALLAR:
    - description (neden ziyaret etmeli)
    - location (tam adres)
    - order (sıra numarası, 1'den başla)
+   - dayNumber (hangi güne ait olduğu, 1'den başla)
 3. OPSIYONEL alanlar:
    - duration (dakika cinsinden, 30-180 arası)
    - estimatedCost (sayısal maliyet)
@@ -88,6 +91,7 @@ KURALLAR:
    - STANDARD: Orta seviye, ünlü yerler
    - LUXURY: Pahalı, eksklusif mekanlar
 5. Rota mantıklı bir sırada olmalı (aynı bölgedeki yerler yanyana)
+6. **GÜN AYIRMA KURALı**: Oluşturduğun durakları günlere ayır. Her bir durağın hangi güne ait olduğunu dayNumber alanında belirt. Birbirine yürüme mesafesinde veya yakın olan yerleri aynı gün içine grupla. Günlük akış sabah, öğle ve akşam şeklinde mantıklı bir sırada olsun.
 
 YANIT FORMATI (JSON Array - hiçbir başka metin ekleme):
 [
@@ -97,6 +101,7 @@ YANIT FORMATI (JSON Array - hiçbir başka metin ekleme):
     "description": "string",
     "location": "string",
     "order": number,
+    "dayNumber": number,
     "duration": number | null,
     "estimatedCost": number | null,
     "notes": "string" | null,
@@ -149,6 +154,7 @@ Sadece geçerli JSON döndür, başka yazı yazma!`;
             name: String(stop.name).trim(),
             description: stop.description ? String(stop.description).trim() : null,
             location: String(stop.location).trim(),
+            dayNumber: typeof stop.dayNumber === 'number' ? stop.dayNumber : 1,
             duration: typeof stop.duration === 'number' ? stop.duration : null,
             estimatedCost:
               typeof stop.estimatedCost === 'number' ? stop.estimatedCost : null,

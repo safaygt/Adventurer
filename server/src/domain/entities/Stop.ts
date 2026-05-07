@@ -82,6 +82,13 @@ export interface IStop {
   notes: string | null;
 
   /**
+   * Durağın hangi güne ait olduğunu gösteren gün numarası
+   * Rotanın başlangıcından itibaren 1'den başlar
+   * Örn: 1. gün, 2. gün, 3. gün
+   */
+  dayNumber: number;
+
+  /**
    * Kaydın oluşturulma tarihi (ISO 8601 format)
    */
   createdAt: Date;
