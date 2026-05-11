@@ -56,32 +56,24 @@ export class RouteController {
    */
   createRoute = async (req: Request, res: Response): Promise<void> => {
     try {
-      // ============================================
-      // ADIM 1: İSTEK VERİSİNİ ÇIKAR
-      // ============================================
+  
       // İstek gövdesinden (body) gerekli veriler alınıyor.
       // Destructuring, kodun okunabilirliğini artırıyor.
       const { city, days, budget } = req.body;
 
-      // ============================================
-      // ADIM 2: İŞ MANTIGI ÇAĞRISI
-      // ============================================
+    
       // CreateRouteUseCase.execute() metodunu çağırarak rota oluşturma işlemini başlatıyoruz.
       // Bu metod asenkron (async) olduğu için 'await' ile bekliyoruz.
       // Parametre olarak şehir, gün ve bütçe bilgisini iletiyoruz.
       const stops = await this.createRouteUseCase.execute(city, days, budget);
 
-      // ============================================
-      // ADIM 3: BAŞARILI YANIT DÖNÜ
-      // ============================================
+      
       // 200 status kodu: "OK - İstek başarılı"
       // res.json(): Veriyi otomatik olarak JSON'a çevirir ve Content-Type başlığını ayarlar
       // stops: Oluşturulan gezi noktalarının listesi
       res.status(200).json(stops);
     } catch (error) {
-      // ============================================
-      // ADIM 4: HATA İŞLEME
-      // ============================================
+    
       // Eğer herhangi bir aşamada hata meydana gelirse (validasyon, AI servisi, vb.) buraya gelir.
       
       // Error nesnesinden mesajı çıkartıyoruz.
