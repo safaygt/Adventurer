@@ -65,52 +65,122 @@ const router = Router();
 
 /**
  * ============================================
- * ADIM 2: BAĞIMLILIĞIN ENJEKTE EDILMESI
+ * ADIM 2: LAZY INITIALIZATION (GECIKMELI YÜKLEMİ)
  * ============================================
+ * 
+ * Neden Lazy Initialization?
+ * ===========================
+ * 
+ * Sorun: Daha önce bağımlılıkları hemen oluşturmaya çalıştığımız için,
+ * dotenv.config() çalışmadan GEMINI_API_KEY ortam değişkeni erişilmiş,
+ * hata oluşmuştu.
+ * 
+ * Çözüm: Lazy Initialization - Bağımlılıkları GEREKEN ZAMAN oluşturma
+ * 
+ * Akış:
+ * 1. index.ts çalışır
+ * 2. dotenv.config() çalışır (ortam değişkenleri yüklenir)
+ * 3. Express uygulaması oluşturulur
+ * 4. route.ts yüklenir (bağımlılıklar henüz oluşturulmaz)
+ * 5. İlk HTTP istek gelir
+ * 6. getRouteController() çağrılır
+ * 7. Ancak bu noktada process.env.GEMINI_API_KEY erişilebilir!
+ * 8. GeminiAIService başarıyla oluşturulur
+ * 
+ * Avantajları:
+ * ✅ Ortam değişkenleri gerektiğinde erişilebilir
+ * ✅ Sunucu başlatılırken hata yok
+ * ✅ Maliyetli operasyonlar (API bağlantıları) lazy oluşturulur
+ * ✅ Testte mock'lanması kolay (factory fonksiyonlar)
+ * 
+ * Singleton Pattern:
+ * İlk oluşturulduktan sonra, aynı örnek (instance) tekrar kullanılır.
+ * Bu, kaynak verimliliği ve performa boosts sağlar.
  */
 
-// Adım 2.1: GeminiAIService Örneğini Oluşturma
-// -----------------------------------------
-// GeminiAIService sınıfının bir örneğini (instance) oluşturuyoruz.
-// Bu örnek, Google Gemini AI API'sine bağlanıp rota oluşturacak.
-//
-// Neden burada oluşturuyoruz?
-// - Route'lar kuruluş (initialization) sırasında yüklenir
-// - GeminiAIService'in bağlantısı da bu sırada hazırlanmalı
-// - Her route için yeni örnek oluşturmamak, kaynakları tasarruf ediyor
-const geminiAIService = new GeminiAIService();
+// Singleton değişkenleri: Ilk oluşturulduktan sonra cache'lenmek için
+// ====================================================================
 
-// Adım 2.2: CreateRouteUseCase'e GeminiAIService Enjeksiyonu
-// ---------------------------------------------------------
-// CreateRouteUseCase, şehir/gün/bütçe bilgisini alıp GeminiAIService'i çağırır.
-// GeminiAIService'i constructor'a parametre olarak veriyoruz ki,
-// CreateRouteUseCase.execute() içinde this.geminiAIService.generateRoute() kullanabilsin.
-//
-// Bu enjeksiyonun sebebi:
-// - CreateRouteUseCase, bağımlılıklarını kendi oluşturmamalı (testte kolayca mock edilecek)
-// - İş mantığı (use case) dış sistem servisleriyle doğrudan bağlı olmamalı
-// - Bağımlılık ters yönde akmalı (IoC - Inversion of Control)
-const createRouteUseCase = new CreateRouteUseCase(geminiAIService);
+// GeminiAIService singleton'u
+// null: Henüz oluşturulmadı
+// Ilk getGeminiService() çağrısında oluşturulacak
+let geminiAIServiceInstance: GeminiAIService | null = null;
 
-// Adım 2.3: RouteController'a CreateRouteUseCase Enjeksiyonu
-// ----------------------------------------------------------
-// RouteController, HTTP isteklerini işleyip CreateRouteUseCase'i çağırır.
-// CreateRouteUseCase'i constructor'a parametre olarak veriyoruz.
-//
-// Akış:
-// HTTP POST /generate → RouteController.createRoute()
-//                    → this.createRouteUseCase.execute()
-//                    → geminiAIService.generateRoute()
-//
-// Bu mimari, her katmanın kendi sorumluluğunu yerine getirmesini sağlar:
-// - RouteController: HTTP işleri (istek/cevap)
-// - CreateRouteUseCase: İş mantığı (validasyon, orchestration)
-// - GeminiAIService: Dış sistem entegrasyonu (AI servisi)
-const routeController = new RouteController(createRouteUseCase);
+// CreateRouteUseCase singleton'u
+let createRouteUseCaseInstance: CreateRouteUseCase | null = null;
+
+// RouteController singleton'u
+let routeControllerInstance: RouteController | null = null;
+
+/**
+ * getGeminiService()
+ * ------------------
+ * GeminiAIService singleton'unu döndüren factory fonksiyonu
+ * 
+ * @returns GeminiAIService instance
+ * 
+ * Çalışma Mantığı:
+ * 1. Eğer geminiAIServiceInstance null ise, yeni instance oluştur
+ * 2. Eğer null değilse, var olan instance'ı döndür (singleton pattern)
+ * 3. Bu sayede API bağlantısı sadece ilk seferde oluşturulur
+ */
+function getGeminiService(): GeminiAIService {
+  // ❌ PROBLEM: Eğer burada new GeminiAIService() yaparsak, her seferinde
+  // çağrılacak ve process.env.GEMINI_API_KEY kontrol edilecek.
+  // Ama şu anda ortam değişkenleri henüz yüklenmemişse hata olur!
+  
+  // ✅ ÇÖZÜM: if (!instance) { new ... } pattern kullan (lazy creation)
+  if (!geminiAIServiceInstance) {
+    geminiAIServiceInstance = new GeminiAIService();
+  }
+  return geminiAIServiceInstance;
+}
+
+/**
+ * getCreateRouteUseCase()
+ * -----------------------
+ * CreateRouteUseCase singleton'unu döndüren factory fonksiyonu
+ * 
+ * @returns CreateRouteUseCase instance
+ * 
+ * Bağımlılık: GeminiAIService'i enjekte eder
+ */
+function getCreateRouteUseCase(): CreateRouteUseCase {
+  if (!createRouteUseCaseInstance) {
+    // GeminiAIService'i getir (eğer yoksa oluştur, varsa return et)
+    const geminiService = getGeminiService();
+    createRouteUseCaseInstance = new CreateRouteUseCase(geminiService);
+  }
+  return createRouteUseCaseInstance;
+}
+
+/**
+ * getRouteController()
+ * --------------------
+ * RouteController singleton'unu döndüren factory fonksiyonu
+ * 
+ * @returns RouteController instance
+ * 
+ * Bağımlılık: CreateRouteUseCase'i enjekte eder
+ * (CreateRouteUseCase da GeminiAIService'i enjekte eder)
+ * 
+ * Dependency Chain:
+ * getRouteController()
+ *   └─ getCreateRouteUseCase()
+ *       └─ getGeminiService()
+ */
+function getRouteController(): RouteController {
+  if (!routeControllerInstance) {
+    // CreateRouteUseCase'i getir (eğer yoksa oluştur, varsa return et)
+    const useCase = getCreateRouteUseCase();
+    routeControllerInstance = new RouteController(useCase);
+  }
+  return routeControllerInstance;
+}
 
 /**
  * ============================================
- * ADIM 3: ROTA TANIMLAMASI
+ * ADIM 3: ROTA TANIMLAMASI (LAZY INITIALIZATION İLE)
  * ============================================
  */
 
@@ -118,8 +188,10 @@ const routeController = new RouteController(createRouteUseCase);
 // ------------------
 // HTTP Method: POST
 // Path: /generate
-// Handler: routeController.createRoute
+// Handler: getRouteController().createRoute
 //
+// ÖNEMLI: Handler'da getRouteController() çağrılıyor!
+// 
 // Neden POST metodu kullanıyoruz?
 // --------------------------------
 // 1. RESTful Prensibi: Veri oluşturma işlemleri POST ile yapılır (GET değil)
@@ -136,7 +208,14 @@ const routeController = new RouteController(createRouteUseCase);
 // - PUT: Var olan bir kaynağı güncelleme için (burada yeni oluşturuluyor)
 // - DELETE: Kaynağı silme için (uygulanabilir değil)
 // - PATCH: Kısmi güncelleme için (burada tam yeni oluşturuluyor)
-router.post('/generate', routeController.createRoute);
+//
+// ⚡ LAZY INITIALIZATION HANDLER:
+// İlk istek geldiğinde getRouteController() çağrılacak ve
+// bağımlılıklar o zaman oluşturulacak (ortam değişkenleri artık yüklü!)
+router.post('/generate', async (req, res) => {
+  const controller = getRouteController();
+  await controller.createRoute(req, res);
+});
 
 /**
  * ============================================

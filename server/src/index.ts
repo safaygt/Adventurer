@@ -38,18 +38,7 @@ import cors from 'cors';
 // dotenv.config(), bu değişkenleri process.env'e yükler.
 import dotenv from 'dotenv';
 
-// ============================================
-// PRESENTATİON KATMANI (ROUTES)
-// ============================================
 
-// routeRouter: Rota tanımlamalarını içeren Express Router
-// Bu router, /generate endpoint'ini ve tüm bağımlılıklarını içerir.
-// 
-// İçerdikleri:
-// - POST /generate: Gezi rotası oluşturma endpoint'i
-// - RouteController ile tüm route handlerları
-// - CreateRouteUseCase ve GeminiAIService enjeksiyonları
-import routeRouter from './presentation/routes/route.js';
 
 /**
  * ============================================
@@ -72,6 +61,23 @@ import routeRouter from './presentation/routes/route.js';
  * Bu yüzden en başta yapılır.
  */
 dotenv.config();
+
+
+
+// ============================================
+// PRESENTATİON KATMANI (ROUTES)
+// ============================================
+
+// routeRouter: Rota tanımlamalarını içeren Express Router
+// Bu router, /generate endpoint'ini ve tüm bağımlılıklarını içerir.
+// 
+// İçerdikleri:
+// - POST /generate: Gezi rotası oluşturma endpoint'i
+// - RouteController ile tüm route handlerları
+// - CreateRouteUseCase ve GeminiAIService enjeksiyonları
+import routeRouter from './presentation/routes/route.js';
+
+
 
 /**
  * ============================================
