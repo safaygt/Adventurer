@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Route" ALTER COLUMN "userId" DROP NOT NULL;

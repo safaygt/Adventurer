@@ -23,13 +23,11 @@ enum BudgetType {
 }
 
 enum StopType {
-  BREAKFAST
-  LUNCH
-  DINNER
-  SIGHTSEEING
-  SHOPPING
+  ACCOMMODATION
+  ATTRACTION
+  RESTAURANT
   ACTIVITY
-  REST
+  TRANSPORT
   OTHER
 }
 
@@ -54,13 +52,16 @@ model User {
 /// Route model - Kullanıcı tarafından oluşturulan seyahat rotası
 model Route {
   id          String      @id @default(cuid())
-  userId      String
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   title       String
   description String?
   city        String
   
+  @@unique([userId, title])
+
+
   /// Seyahat tarihleri
   startDate   DateTime
   endDate     DateTime

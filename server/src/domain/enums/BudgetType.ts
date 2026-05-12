@@ -2,12 +2,13 @@
  * BudgetType Enum
  * 
  * Rotalar için bütçe kategorilerini tanımlar.
- * - ECONOMIC: Uygun fiyatlı, bütçe dostu seçenekler
- * - STANDARD: Orta seviye, dengeli seçenekler
+ * Schema.prisma'da tanımlı BudgetType enum'u ile uyumludur.
+ * - BUDGET: Uygun fiyatlı, bütçe dostu seçenekler
+ * - MODERATE: Orta seviye, dengeli seçenekler
  * - LUXURY: Premium, üst düzey seçenekler
  */
 export enum BudgetType {
-  ECONOMIC = 'ECONOMIC',
-  STANDARD = 'STANDARD',
+  BUDGET = 'BUDGET',
+  MODERATE = 'MODERATE',
   LUXURY = 'LUXURY',
 }

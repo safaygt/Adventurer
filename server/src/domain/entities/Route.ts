@@ -16,8 +16,9 @@ export interface IRoute {
   /**
    * Rotayı oluşturan kullanıcının ID'si
    * Bir rota sadece bir kullanıcıya aittir
+   * Misafir rotaları için null olabilir
    */
-  userId: string;
+  userId: string | null;
 
   /**
    * Rotanın başlığı

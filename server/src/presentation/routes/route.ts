@@ -9,7 +9,7 @@ import { RouteController } from '../controllers/RouteController.js';
 
 
 // CreateRouteUseCase, iş mantığını (business logic) içeren sınıftır.
-// Şehir, gün ve bütçe bilgisinden bir gezi rotası oluşturmaktan sorumludur.
+// Şehir, gün, bütçe, title bilgisinden bir gezi rotası oluşturmaktan sorumludur.
 // Controller tarafından çağrılacak ve use case tarafından işlenecek.
 import { CreateRouteUseCase } from '../../application/use-cases/CreateRouteUseCase.js';
 
@@ -18,6 +18,10 @@ import { CreateRouteUseCase } from '../../application/use-cases/CreateRouteUseCa
 // Bu servis, AI kullanarak gezi rotasını üretir.
 // CreateRouteUseCase tarafından kullanılacaktır.
 import { GeminiAIService } from '../../infrastructure/services/GeminiAIService.js';
+
+// Database Connection Manager
+// Prisma Client singleton'unu yönetir
+import { getPrismaClient } from '../../infrastructure/database/prisma.js';
 
 /**
  
@@ -143,13 +147,17 @@ function getGeminiService(): GeminiAIService {
  * 
  * @returns CreateRouteUseCase instance
  * 
- * Bağımlılık: GeminiAIService'i enjekte eder
+ * Bağımlılıklar: 
+ * - GeminiAIService'i enjekte eder
+ * - PrismaClient'i enjekte eder
  */
 function getCreateRouteUseCase(): CreateRouteUseCase {
   if (!createRouteUseCaseInstance) {
     // GeminiAIService'i getir (eğer yoksa oluştur, varsa return et)
     const geminiService = getGeminiService();
-    createRouteUseCaseInstance = new CreateRouteUseCase(geminiService);
+    // PrismaClient'i getir (database singleton'undan)
+    const prismaClient = getPrismaClient();
+    createRouteUseCaseInstance = new CreateRouteUseCase(geminiService, prismaClient);
   }
   return createRouteUseCaseInstance;
 }
@@ -161,19 +169,24 @@ function getCreateRouteUseCase(): CreateRouteUseCase {
  * 
  * @returns RouteController instance
  * 
- * Bağımlılık: CreateRouteUseCase'i enjekte eder
- * (CreateRouteUseCase da GeminiAIService'i enjekte eder)
+ * Bağımlılıklar: 
+ * - CreateRouteUseCase'i enjekte eder
+ * - PrismaClient'i enjekte eder
  * 
  * Dependency Chain:
  * getRouteController()
- *   └─ getCreateRouteUseCase()
- *       └─ getGeminiService()
+ *   ├─ getCreateRouteUseCase()
+ *   │   ├─ getGeminiService()
+ *   │   └─ getPrismaClient() (import'ı)
+ *   └─ getPrismaClient() (import'ı)
  */
 function getRouteController(): RouteController {
   if (!routeControllerInstance) {
     // CreateRouteUseCase'i getir (eğer yoksa oluştur, varsa return et)
     const useCase = getCreateRouteUseCase();
-    routeControllerInstance = new RouteController(useCase);
+    // PrismaClient'i getir (database singleton'undan)
+    const prismaClient = getPrismaClient();
+    routeControllerInstance = new RouteController(useCase, prismaClient);
   }
   return routeControllerInstance;
 }
