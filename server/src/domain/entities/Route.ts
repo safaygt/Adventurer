@@ -1,4 +1,5 @@
 import { BudgetType } from '../enums/BudgetType.js';
+import type { IStop } from './index.js';
 
 /**
  * Route Entity
@@ -38,6 +39,9 @@ export interface IRoute {
    * Örn: "İstanbul", "Antalya"
    */
   city: string;
+
+  stops?: IStop[];
+
 
   /**
    * Rotanın başlama tarihi

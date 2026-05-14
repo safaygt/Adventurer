@@ -194,28 +194,29 @@ export class CreateRouteUseCase {
                 // ⚠️ TYPE CASTING: Domain BudgetType → Prisma BudgetType
                 // İkisi nominal olarak farklı olsa da, string değerleri aynı
                 budgetType: budget as PrismaBudgetType,
+             
               },
             });
 
             // ADIM 2: Tüm Stop'ları Toplu (Batch) Ekle
             // ============================================
             // AI'dan gelen durakları, createdRoute'un ID'siyle ilişkilendirerek ekleyelim
-            const createdStops = await tx.stop.createMany({
-              data: stops.map((stop) => ({
-                routeId: createdRoute.id,  // Route'u bu stop'lara bağla
-                order: stop.order,
-                // ⚠️ TYPE CASTING: Domain StopType → Prisma StopType
-                type: stop.type as PrismaStopType,
-                name: stop.name,
-                description: stop.description || null,
-                location: stop.location || null,
-                latitude: stop.latitude || null,
-                longitude: stop.longitude || null,
-                duration: stop.duration || null,
-                estimatedCost: stop.estimatedCost || null,
-                notes: stop.notes || null,
-              })),
-            });
+            await tx.stop.createMany({
+            data: stops.map((stop) => ({
+              routeId: createdRoute.id,
+              order: stop.order,
+              type: stop.type as PrismaStopType,
+              name: stop.name,
+              description: stop.description || null,
+              location: stop.location || null,
+              latitude: stop.latitude || null,
+              longitude: stop.longitude || null,
+              duration: stop.duration || null,
+              estimatedCost: stop.estimatedCost || null,
+              notes: stop.notes || null,
+              dayNumber: stop.dayNumber || 1, // 👈 IStop'ta bu zorunlu, eklemeyi unutma!
+                })),
+              });
 
             /**
              * ✅ TRANSACTION BAŞARILI
@@ -246,6 +247,7 @@ export class CreateRouteUseCase {
           budgetType: route.budgetType as BudgetType,
           createdAt: route.createdAt,
           updatedAt: route.updatedAt,
+          stops: stops, 
         };
       } catch (error) {
         /**
@@ -300,6 +302,7 @@ export class CreateRouteUseCase {
         budgetType: budget,
         createdAt: now,
         updatedAt: now,
+        stops: stops, 
       };
     }
   }

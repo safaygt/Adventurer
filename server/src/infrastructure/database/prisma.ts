@@ -6,6 +6,7 @@
  * tüm modüller bu bağlantıyı paylaşır.
  */
 
+import 'dotenv/config';
 import { PrismaClient as GeneratedPrismaClient } from '../../generated/prisma/client.js';
 
 let prismaClientInstance: GeneratedPrismaClient | null = null;
