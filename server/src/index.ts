@@ -199,9 +199,9 @@ app.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║  🚀 ADVENTURER SUNUCUSU BAŞLADI        ║
-║  🌍 URL: http://localhost:${PORT}      ║
+║  🌍 URL: http://localhost:${PORT}         ║
 ║  📡 API Path: /api                     ║
-║  🛣️  Routes: /api/generate (POST)      ║
+║                                        ║
 ╚════════════════════════════════════════╝
   `);
 });

@@ -2,6 +2,8 @@
 // 'type' anahtar kelimesi TypeScript'e bu importunun sadece tür tanımı için olduğunu söyler,
 import type { Request, Response } from 'express';
 import { CreateRouteUseCase } from '../../application/use-cases/CreateRouteUseCase.js';
+import { GetRoutesByUserIdUseCase } from '../../application/use-cases/GetRoutesByUserIdUseCase.js';
+import { GetRouteDetailsUseCase, RouteNotFoundError } from '../../application/use-cases/GetRouteDetailsUseCase.js';
 import { BudgetType } from '../../domain/enums/BudgetType.js';
 import { PrismaClient as GeneratedPrismaClient } from '../../generated/prisma/client.js';
 
@@ -33,6 +35,8 @@ export class RouteController {
    */
   constructor(
     private createRouteUseCase: CreateRouteUseCase,
+    private getRoutesByUserIdUseCase: GetRoutesByUserIdUseCase,
+    private getRouteDetailsUseCase: GetRouteDetailsUseCase,
     private prismaClient: GeneratedPrismaClient
   ) {}
 
@@ -114,6 +118,227 @@ export class RouteController {
       // 400 status kodu: "Bad Request - İstek hatalı veya işlenemiyor"
       // error alanında detaylı hata mesajını gönderiyoruz ki istemci (frontend) bunu görebilsin
       res.status(400).json({ error: errorMessage });
+    }
+  };
+
+  /**
+   * getRoutesByUserId - Belirli bir kullanıcının tüm rotalarını listeleyen HTTP endpoint metodu
+   * 
+   * Arrow function kullanılır (this context'i korumak için)
+   * 
+   * Beklenen İstek Format:
+   * URL Parametresi:
+   * GET /routes/user/:userId
+   * 
+   * Örnek: GET /routes/user/clh123abc456
+   * 
+   * HTTP Yanıtları:
+   * - 200 OK: Rotalar başarıyla getirildi (liste boş olabilir)
+   * - 400 Bad Request: userId parametresi eksik veya hatalı
+   * 
+   * Yanıt Body (IRoute[]):
+   * [
+   *   {
+   *     id: "route-id-1",
+   *     userId: "clh123abc456",
+   *     title: "İstanbul Rotası",
+   *     city: "İstanbul",
+   *     startDate: "2026-05-12T...",
+   *     endDate: "2026-05-15T...",
+   *     budgetType: "MODERATE",
+   *     ...
+   *   },
+   *   {
+   *     id: "route-id-2",
+   *     userId: "clh123abc456",
+   *     title: "Antalya Rotası",
+   *     city: "Antalya",
+   *     ...
+   *   }
+   * ]
+   * 
+   * 📝 Not: 
+   * - Stops dahil EDILMEZ (performans için, sadece rota özeti)
+   * - Hiç rota yoksa boş array [] döndürülür (hata değil, normal durum)
+   * - userId boş veya null ise 400 hatası döndürülür
+   */
+  getRoutesByUserId = async (req: Request, res: Response): Promise<void> => {
+    try {
+      // URL parametresinden userId'yi al
+      // URL: GET /routes/user/:userId
+      // req.params.userId bu parametreyi içerir
+      const userId = req.params.userId;
+
+      // Validasyon: userId parametresi var mı ve string tipi mi?
+      // Express'te req.params değerleri string | string[] olabilir
+      // Bu yüzden önce type check yapmalıyız
+      if (typeof userId !== 'string' || userId.trim().length === 0) {
+        res.status(400).json({
+          error: 'Kullanıcı ID parametresi gerekli ve boş olmayan bir metin olmalıdır.',
+        });
+        return;
+      }
+
+      // ============================================
+      // 🎯 USE CASE ÇALIŞTIRILMASI
+      // ============================================
+      // GetRoutesByUserIdUseCase.execute() metodunu çağırarak
+      // verilen userId'ye ait tüm rotaları getiriyoruz
+      //
+      // await: Asenkron işlemin tamamlanmasını bekle
+      // routes: Dönen rota listesi (IRoute[])
+      // Stops dahil OLMAZ, sadece rota summary'leri
+
+      const routes = await this.getRoutesByUserIdUseCase.execute(userId);
+
+      // ============================================
+      // ✅ BAŞARILI YANIT
+      // ============================================
+      // 200 OK: Başarıyla işlendi
+      // JSON body'de routes array'ini döndür
+      // Liste boş olabilir, bu normal durum
+
+      res.status(200).json(routes);
+    } catch (error) {
+      // ============================================
+      // ❌ HATA YAKALAMA
+      // ============================================
+      // UseCase veya Prisma'dan hata geldi
+      // Hata mesajını extract et ve HTTP 400 ile döndür
+
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      res.status(400).json({ error: errorMessage });
+    }
+  };
+
+  /**
+   * getRouteDetails - Belirli bir rotanın tüm detaylarını (stops ile) getiren HTTP endpoint metodu
+   * 
+   * Arrow function kullanılır (this context'i korumak için)
+   * 
+   * Beklenen İstek Format:
+   * URL Parametresi:
+   * GET /routes/:routeId
+   * 
+   * Örnek: GET /routes/clh456def789
+   * 
+   * HTTP Yanıtları:
+   * - 200 OK: Rota başarıyla getirildi (Stops dahil)
+   * - 404 Not Found: Rota veritabanında bulunamadı
+   * - 400 Bad Request: routeId parametresi eksik veya veritabanı hatası
+   * 
+   * Yanıt Body (IRoute - Stops dahil):
+   * {
+   *   id: "route-id-123",
+   *   userId: "clh123abc456",
+   *   title: "İstanbul Rotası",
+   *   city: "İstanbul",
+   *   description: "Tarihî yarımada turunu içeren 3 günlük rota",
+   *   startDate: "2026-05-12T00:00:00Z",
+   *   endDate: "2026-05-14T23:59:59Z",
+   *   budgetType: "MODERATE",
+   *   stops: [
+   *     {
+   *       id: "stop-1",
+   *       routeId: "route-id-123",
+   *       order: 1,
+   *       name: "Topkapı Sarayı",
+   *       type: "ATTRACTION",
+   *       description: "Osmanlı padişahlarının ikamet ettiği saray...",
+   *       location: "Cankurtaran, İstanbul",
+   *       latitude: 41.0136,
+   *       ...
+   *     },
+   *     {
+   *       id: "stop-2",
+   *       routeId: "route-id-123",
+   *       order: 2,
+   *       name: "Galata Kulesi",
+   *       type: "ATTRACTION",
+   *       ...
+   *     }
+   *   ],
+   *   createdAt: "2026-05-10T10:20:30Z",
+   *   updatedAt: "2026-05-10T10:20:30Z"
+   * }
+   * 
+   * 📝 Notlar:
+   * - Stops dahil EDILIR ve order'a göre sıralıdır (Gün 1, Gün 2, etc.)
+   * - Rota bulunamazsa RouteNotFoundError fırlatılır → HTTP 404 döndürülür
+   * - Stops array'i, rota içerisinde stops field'ında bulunur
+   * 
+   * 🔍 Fark: getRoutesByUserId vs getRouteDetails
+   * - getRoutesByUserId: Birden fazla rota, stops YOK, hızlı liste
+   * - getRouteDetails: Bir rota, stops VAR, detaylı bilgi
+   */
+  getRouteDetails = async (req: Request, res: Response): Promise<void> => {
+    try {
+      // URL parametresinden routeId'yi al
+      // URL: GET /routes/:routeId
+      // req.params.routeId bu parametreyi içerir
+      const routeId = req.params.routeId;
+
+      // Validasyon: routeId parametresi var mı ve string tipi mi?
+      // Express'te req.params değerleri string | string[] olabilir
+      // Bu yüzden önce type check yapmalıyız
+      if (typeof routeId !== 'string' || routeId.trim().length === 0) {
+        res.status(400).json({
+          error: 'Rota ID parametresi gerekli ve boş olmayan bir metin olmalıdır.',
+        });
+        return;
+      }
+
+      // ============================================
+      // 🎯 USE CASE ÇALIŞTIRILMASI
+      // ============================================
+      // GetRouteDetailsUseCase.execute() metodunu çağırarak
+      // verilen routeId'ye ait rotayı (stops ile beraber) getiriyoruz
+      //
+      // await: Asenkron işlemin tamamlanmasını bekle
+      // route: Dönen rota object'i (IRoute - stops dahil)
+      //
+      // Olası Exceptions:
+      // - RouteNotFoundError: Rota DB'de yok (404 ile handle edecek)
+      // - Error: Validasyon veya DB bağlantı hatası (400 ile handle edecek)
+
+      const route = await this.getRouteDetailsUseCase.execute(routeId);
+
+      // ============================================
+      // ✅ BAŞARILI YANIT
+      // ============================================
+      // 200 OK: Rota başarıyla bulundu ve döndürüldü
+      // JSON body'de rota object'ini (stops dahil) döndür
+
+      res.status(200).json(route);
+    } catch (error) {
+      // ============================================
+      // ❌ HATA YAKALAMA VE HTTP STATUS BELIRLEME
+      // ============================================
+      // Hata türüne göre farklı HTTP status kodu döndürüyoruz:
+      //
+      // 1) RouteNotFoundError → 404 Not Found
+      //    "Rota bulunamadı" anlamında standart HTTP response
+      //
+      // 2) Diğer Errorlar → 400 Bad Request
+      //    Validasyon hatası veya sistem hatası
+
+      if (error instanceof RouteNotFoundError) {
+        // ============================================
+        // 🔴 404 NOT FOUND - Rota Bulunamadı
+        // ============================================
+        const errorMessage = error.message;
+        res.status(404).json({ error: errorMessage });
+      } else {
+        // ============================================
+        // 🟡 400 BAD REQUEST - Diğer Hatalar
+        // ============================================
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        res.status(400).json({ error: errorMessage });
+      }
     }
   };
 }
