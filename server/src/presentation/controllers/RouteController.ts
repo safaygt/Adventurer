@@ -4,6 +4,8 @@ import type { Request, Response } from 'express';
 import { CreateRouteUseCase } from '../../application/use-cases/CreateRouteUseCase.js';
 import { GetRoutesByUserIdUseCase } from '../../application/use-cases/GetRoutesByUserIdUseCase.js';
 import { GetRouteDetailsUseCase, RouteNotFoundError } from '../../application/use-cases/GetRouteDetailsUseCase.js';
+import { DeleteRouteUseCase, RouteNotFoundError as DeleteRouteNotFoundError } from '../../application/use-cases/DeleteRouteUseCase.js';
+import { UpdateRouteNameUseCase, RouteNotFoundError as UpdateRouteNotFoundError, ValidationError } from '../../application/use-cases/UpdateRouteNameUseCase.js';
 import { BudgetType } from '../../domain/enums/BudgetType.js';
 import { PrismaClient as GeneratedPrismaClient } from '../../generated/prisma/client.js';
 
@@ -26,7 +28,11 @@ export class RouteController {
    * ⚙️ CONSTRUCTOR - Bağımlılık Enjeksiyonu
    * 
    * @param createRouteUseCase - İş mantığını içeren use case
-   * @param prismaClient - Veritabanı client (future use)
+   * @param getRoutesByUserIdUseCase - Kullanıcıya ait rotaları getiren use case
+   * @param getRouteDetailsUseCase - Rota detaylarını getiren use case
+   * @param deleteRouteUseCase - Rotayı silmeyen use case
+   * @param updateRouteNameUseCase - Rota başlığını güncelleyen use case
+   * @param prismaClient - Veritabanı client
    * 
    * Neden DI?
    * - Test sırasında mock CreateRouteUseCase verebiliriz
@@ -37,6 +43,8 @@ export class RouteController {
     private createRouteUseCase: CreateRouteUseCase,
     private getRoutesByUserIdUseCase: GetRoutesByUserIdUseCase,
     private getRouteDetailsUseCase: GetRouteDetailsUseCase,
+    private deleteRouteUseCase: DeleteRouteUseCase,
+    private updateRouteNameUseCase: UpdateRouteNameUseCase,
     private prismaClient: GeneratedPrismaClient
   ) {}
 
@@ -325,6 +333,308 @@ export class RouteController {
       //    Validasyon hatası veya sistem hatası
 
       if (error instanceof RouteNotFoundError) {
+        // ============================================
+        // 🔴 404 NOT FOUND - Rota Bulunamadı
+        // ============================================
+        const errorMessage = error.message;
+        res.status(404).json({ error: errorMessage });
+      } else {
+        // ============================================
+        // 🟡 400 BAD REQUEST - Diğer Hatalar
+        // ============================================
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        res.status(400).json({ error: errorMessage });
+      }
+    }
+  };
+
+  /**
+   * deleteRoute - Belirli bir rotayı silen HTTP endpoint metodu
+   * 
+   * Arrow function (=>) olarak tanımlanmasının sebebi:
+   * - Express route'larında 'this' context'i kaybediliyor
+   * - Arrow function, dış kapsamın 'this'ini korur
+   * - Böylece this.deleteRouteUseCase'e erişim sağlanır
+   * 
+   * Beklenen İstek Format:
+   * HTTP Method: DELETE
+   * URL: /routes/:routeId
+   * Örnek: DELETE /routes/clh456def789
+   * 
+   * URL Parametresi:
+   * :routeId - Silinecek rotanın ID'si (UUID)
+   * 
+   * HTTP Yanıtları:
+   * - 204 No Content: Rota başarıyla silindi (JSON body yoktur)
+   * - 404 Not Found: Rota veritabanında bulunamadı
+   * - 400 Bad Request: Validasyon hatası, routeId parametresi eksik veya DB hatası
+   * 
+   * 🎯 İş Akışı:
+   * 1. URL parametresinden routeId'yi al
+   * 2. Validasyon: routeId geçerli mi?
+   * 3. DeleteRouteUseCase.execute() çağır
+   * 4. Başarılı ise 204 No Content döndür
+   * 5. RouteNotFoundError ise 404 döndür
+   * 6. Diğer hatalar ise 400 döndür
+   * 
+   * 📝 204 No Content Açıklaması:
+   * - Başarılı olması anlamına gelir
+   * - Response body'si BOŞ'tur (JSON dahil değer yok)
+   * - DELETE işlemleri için RESTful standarttır
+   * 
+   * 🔄 Cascade Delete:
+   * - Rota silindiğinde, ilişkili tüm Stop'lar otomatik silinir
+   * - Prisma schema'sında onDelete: Cascade tanımlı
+   * - Bu, orphan (sahipsiz) Stop kayıtlarının oluşmasını önler
+   */
+  deleteRoute = async (req: Request, res: Response): Promise<void> => {
+    try {
+      // URL parametresinden routeId'yi al
+      // URL: DELETE /routes/:routeId
+      // req.params.routeId bu parametreyi içerir
+      const routeId = req.params.routeId;
+
+      // ============================================
+      // ✅ VALIDASYON: routeId Kontrolü
+      // ============================================
+      // URL parametresi var mı ve geçerli mi?
+      // Express'te req.params değerleri string | string[] olabilir
+      // Bu yüzden önce type check yapmalıyız
+
+      if (typeof routeId !== 'string' || routeId.trim().length === 0) {
+        res.status(400).json({
+          error: 'Rota ID parametresi gerekli ve boş olmayan bir metin olmalıdır.',
+        });
+        return;
+      }
+
+      // ============================================
+      // 🎯 USE CASE ÇALIŞTIRILMASI
+      // ============================================
+      // DeleteRouteUseCase.execute() metodunu çağırarak
+      // verilen routeId'ye ait rotayı siliyoruz
+      //
+      // await: Asenkron işlemin tamamlanmasını bekle
+      // void döner (silinme başarılıysa exception atılmaz)
+      //
+      // Olası Exceptions:
+      // - RouteNotFoundError: Rota DB'de yok (404 ile handle edecek)
+      // - Error: Validasyon veya DB bağlantı hatası (400 ile handle edecek)
+      //
+      // Cascade Delete:
+      // - Stop tablosundaki ilişkili kayıtlar otomatik silinir
+      // - Veri bütünlüğü sağlanır
+
+      await this.deleteRouteUseCase.execute(routeId);
+
+      // ============================================
+      // ✅ BAŞARILI YANIT - 204 NO CONTENT
+      // ============================================
+      // 204 No Content: 
+      // - İstek başarıyla işlendi
+      // - Response body'si BOŞ'tur (JSON yok)
+      // - Silme işlemleri için RESTful standarttır
+      //
+      // JSON göndermiyoruz, çünkü 204 standartta body yoktur!
+
+      res.status(204).send();
+    } catch (error) {
+      // ============================================
+      // ❌ HATA YAKALAMA VE HTTP STATUS BELIRLEME
+      // ============================================
+      // Hata türüne göre farklı HTTP status kodu döndürüyoruz:
+      //
+      // 1) RouteNotFoundError → 404 Not Found
+      //    "Rota bulunamadı" anlamında standart HTTP response
+      //
+      // 2) Diğer Errorlar → 400 Bad Request
+      //    Validasyon hatası veya sistem hatası
+
+      if (error instanceof DeleteRouteNotFoundError) {
+        // ============================================
+        // 🔴 404 NOT FOUND - Rota Bulunamadı
+        // ============================================
+        const errorMessage = error.message;
+        res.status(404).json({ error: errorMessage });
+      } else {
+        // ============================================
+        // 🟡 400 BAD REQUEST - Diğer Hatalar
+        // ============================================
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        res.status(400).json({ error: errorMessage });
+      }
+    }
+  };
+
+  /**
+   * updateRouteName - Belirli bir rotanın adını (title) güncelleyen HTTP endpoint metodu
+   * 
+   * Arrow function (=>) olarak tanımlanmasının sebebi:
+   * - Express route'larında 'this' context'i kaybediliyor
+   * - Arrow function, dış kapsamın 'this'ini korur
+   * - Böylece this.updateRouteNameUseCase'e erişim sağlanır
+   * 
+   * Beklenen İstek Format:
+   * HTTP Method: PATCH
+   * URL: /routes/:routeId/rename
+   * Örnek: PATCH /routes/clh456def789/rename
+   * 
+   * URL Parametresi:
+   * :routeId - Güncellenecek rotanın ID'si (UUID)
+   * 
+   * Request Body (JSON):
+   * {
+   *   "newTitle": "Yeni Rota Adı"  // string: Rotanın yeni başlığı (gerekli)
+   * }
+   * 
+   * Validasyon Kuralları:
+   * - newTitle gerekli (required)
+   * - newTitle string tipinde olmalı
+   * - newTitle boş olmamalı (empty string, null, undefined)
+   * - newTitle sadece space'lerden oluşmamalı
+   * 
+   * HTTP Yanıtları:
+   * - 200 OK: Rota başarıyla güncellendi + güncellenmiş rota JSON'ı
+   * - 404 Not Found: Rota veritabanında bulunamadı
+   * - 400 Bad Request: Validasyon hatası (boş newTitle, eksik parametre vb.)
+   * 
+   * 🎯 İş Akışı:
+   * 1. URL parametresinden routeId'yi al
+   * 2. Request body'den newTitle'ı al
+   * 3. Validasyon: routeId ve newTitle geçerli mi?
+   * 4. UpdateRouteNameUseCase.execute() çağır
+   * 5. Başarılı ise 200 + güncellenmiş rota JSON döndür
+   * 6. RouteNotFoundError ise 404 döndür
+   * 7. ValidationError ise 400 döndür
+   * 8. Diğer hatalar ise 400 döndür
+   * 
+   * 📝 PATCH Metodu Açıklaması:
+   * - RESTful'de kısmi güncelleme için PATCH kullanılır
+   * - PUT, kaynağın tamamen değiştirilmesi için kullanılır
+   * - PATCH, sadece title'ı değiştirir (rename işlemi)
+   * 
+   * 📝 Yanıt Body (IRoute):
+   * {
+   *   id: "route-id-123",
+   *   userId: "user-id-456",
+   *   title: "Yeni Rota Adı",        // Güncellenmiş title
+   *   city: "İstanbul",
+   *   description: null,
+   *   startDate: "2026-05-12T...",
+   *   endDate: "2026-05-15T...",
+   *   budgetType: "MODERATE",
+   *   createdAt: "2026-05-10T...",
+   *   updatedAt: "2026-05-18T..."    // Otomatik güncellendi
+   * }
+   * 
+   * 💡 Partial Update:
+   * - Sadece title alanı güncellenir
+   * - Diğer alanlar (city, description, startDate, endDate vb.) değişmez
+   * - updatedAt otomatik Prisma tarafından güncellenir
+   */
+  updateRouteName = async (req: Request, res: Response): Promise<void> => {
+    try {
+      // URL parametresinden routeId'yi al
+      // URL: PATCH /routes/:routeId/rename
+      // req.params.routeId bu parametreyi içerir
+      const routeId = req.params.routeId;
+
+      // Request body'den newTitle'ı al
+      // Body: { newTitle: "Yeni Başlık" }
+      const { newTitle } = req.body;
+
+      // ============================================
+      // ✅ VALIDASYON: routeId Kontrolü
+      // ============================================
+      // URL parametresi var mı ve geçerli mi?
+      // Express'te req.params değerleri string | string[] olabilir
+      // Bu yüzden önce type check yapmalıyız
+
+      if (typeof routeId !== 'string' || routeId.trim().length === 0) {
+        res.status(400).json({
+          error: 'Rota ID parametresi gerekli ve boş olmayan bir metin olmalıdır.',
+        });
+        return;
+      }
+
+      // ============================================
+      // ✅ VALIDASYON: newTitle Kontrolü
+      // ============================================
+      // Request body'den gelen newTitle'ı kontrol et
+      // newTitle null, undefined veya boş olabilir
+      // Bu durumda detaylı validasyon hatası döndür
+
+      if (!newTitle) {
+        res.status(400).json({
+          error: 'Yeni rota başlığı gereklidir (newTitle alanı zorunludur).',
+        });
+        return;
+      }
+
+      // ============================================
+      // 🎯 USE CASE ÇALIŞTIRILMASI
+      // ============================================
+      // UpdateRouteNameUseCase.execute() metodunu çağırarak
+      // verilen routeId'ye ait rotanın title'ını güncelliyoruz
+      //
+      // await: Asenkron işlemin tamamlanmasını bekle
+      // updatedRoute: Güncellenmiş rota object'i (IRoute)
+      //
+      // Olası Exceptions:
+      // - ValidationError: newTitle kuralları ihlal etti (400 ile handle edecek)
+      // - RouteNotFoundError: Rota DB'de yok (404 ile handle edecek)
+      // - Error: Diğer DB bağlantı hatası (400 ile handle edecek)
+      //
+      // Partial Update:
+      // - Sadece title güncellenir
+      // - Diğer alanlar değişmez
+
+      const updatedRoute = await this.updateRouteNameUseCase.execute(
+        routeId,
+        newTitle
+      );
+
+      // ============================================
+      // ✅ BAŞARILI YANIT - 200 OK + Güncellenmiş Rota
+      // ============================================
+      // 200 OK: İstek başarıyla işlendi
+      // Response body'de güncellenmiş rota object'ini döndür
+      //
+      // Dönen data:
+      // - title: Yeni değer
+      // - updatedAt: Otomatik güncellendi
+      // - Diğer alanlar: Değişmedi
+
+      res.status(200).json(updatedRoute);
+    } catch (error) {
+      // ============================================
+      // ❌ HATA YAKALAMA VE HTTP STATUS BELIRLEME
+      // ============================================
+      // Hata türüne göre farklı HTTP status kodu döndürüyoruz:
+      //
+      // 1) ValidationError → 400 Bad Request
+      //    Gelen newTitle kuralları ihlal etti
+      //
+      // 2) RouteNotFoundError → 404 Not Found
+      //    Rota bulunamadı
+      //
+      // 3) Diğer Errorlar → 400 Bad Request
+      //    Sistem hatası veya DB bağlantı hatası
+
+      if (error instanceof ValidationError) {
+        // ============================================
+        // 🟡 400 BAD REQUEST - Validasyon Hatası
+        // ============================================
+        // newTitle kuralları ihlal etti
+        // (boş, null, sadece space'ler, vb.)
+
+        const errorMessage = error.message;
+        res.status(400).json({ error: errorMessage });
+      } else if (error instanceof UpdateRouteNotFoundError) {
         // ============================================
         // 🔴 404 NOT FOUND - Rota Bulunamadı
         // ============================================

@@ -17,6 +17,14 @@ import { GetRoutesByUserIdUseCase } from '../../application/use-cases/GetRoutesB
 // GetRouteDetailsUseCase, belirli bir rotanın tüm detaylarını (stops ile) getiren use case'dir.
 import { GetRouteDetailsUseCase } from '../../application/use-cases/GetRouteDetailsUseCase.js';
 
+// DeleteRouteUseCase, belirli bir rotayı silmeyen use case'dir.
+// Rota silindiğinde, ilişkili tüm Stop'lar da Cascade Delete ile silinir.
+import { DeleteRouteUseCase } from '../../application/use-cases/DeleteRouteUseCase.js';
+
+// UpdateRouteNameUseCase, belirli bir rotanın title'ını güncelleyen use case'dir.
+// Sadece title alanı güncellenir, diğer alanlar değiştirilmez.
+import { UpdateRouteNameUseCase } from '../../application/use-cases/UpdateRouteNameUseCase.js';
+
 // GeminiAIService, dış sistem (Google Gemini AI) ile iletişim kuran sınıftır.
 // Bu servis, AI kullanarak gezi rotasını üretir.
 // CreateRouteUseCase tarafından kullanılacaktır.
@@ -119,6 +127,12 @@ let getRoutesByUserIdUseCaseInstance: GetRoutesByUserIdUseCase | null = null;
 // GetRouteDetailsUseCase singleton'u
 let getRouteDetailsUseCaseInstance: GetRouteDetailsUseCase | null = null;
 
+// DeleteRouteUseCase singleton'u
+let deleteRouteUseCaseInstance: DeleteRouteUseCase | null = null;
+
+// UpdateRouteNameUseCase singleton'u
+let updateRouteNameUseCaseInstance: UpdateRouteNameUseCase | null = null;
+
 // RouteController singleton'u
 let routeControllerInstance: RouteController | null = null;
 
@@ -212,6 +226,66 @@ function getGetRouteDetailsUseCase(): GetRouteDetailsUseCase {
 }
 
 /**
+ * getDeleteRouteUseCase()
+ * ----------------------
+ * DeleteRouteUseCase singleton'unu döndüren factory fonksiyonu
+ * 
+ * @returns DeleteRouteUseCase instance
+ * 
+ * Bağımlılıklar: 
+ * - PrismaClient'i enjekte eder
+ * 
+ * İş Mantığı:
+ * - Belirli bir rotayı ID'ye göre siler
+ * - İlişkili tüm Stop'lar Cascade Delete ile silinir
+ * - Rota bulunamazsa RouteNotFoundError fırlatır
+ * 
+ * Neden Singleton?
+ * - Veritabanı bağlantısı paylaşılır (PrismaClient singleton)
+ * - Her istek için yeni instance oluşturmamız gerekmiyor
+ * - Kaynak verimliliği artar
+ */
+function getDeleteRouteUseCase(): DeleteRouteUseCase {
+  if (!deleteRouteUseCaseInstance) {
+    // PrismaClient'i getir (database singleton'undan)
+    const prismaClient = getPrismaClient();
+    deleteRouteUseCaseInstance = new DeleteRouteUseCase(prismaClient);
+  }
+  return deleteRouteUseCaseInstance;
+}
+
+/**
+ * getUpdateRouteNameUseCase()
+ * ---------------------------
+ * UpdateRouteNameUseCase singleton'unu döndüren factory fonksiyonu
+ * 
+ * @returns UpdateRouteNameUseCase instance
+ * 
+ * Bağımlılıklar: 
+ * - PrismaClient'i enjekte eder
+ * 
+ * İş Mantığı:
+ * - Belirli bir rotanın 'title' (adı) alanını günceller
+ * - Sadece title alanı değiştirilir, diğer alanlar korunur
+ * - Strict validasyon: title boş/null olmamalı, sadece space'ler olmamalı
+ * - Rota bulunamazsa RouteNotFoundError fırlatır
+ * - Validasyon hatası varsa ValidationError fırlatır
+ * 
+ * Neden Singleton?
+ * - Veritabanı bağlantısı paylaşılır (PrismaClient singleton)
+ * - Her istek için yeni instance oluşturmamız gerekmiyor
+ * - Kaynak verimliliği artar
+ */
+function getUpdateRouteNameUseCase(): UpdateRouteNameUseCase {
+  if (!updateRouteNameUseCaseInstance) {
+    // PrismaClient'i getir (database singleton'undan)
+    const prismaClient = getPrismaClient();
+    updateRouteNameUseCaseInstance = new UpdateRouteNameUseCase(prismaClient);
+  }
+  return updateRouteNameUseCaseInstance;
+}
+
+/**
  * getRouteController()
  * --------------------
  * RouteController singleton'unu döndüren factory fonksiyonu
@@ -222,6 +296,8 @@ function getGetRouteDetailsUseCase(): GetRouteDetailsUseCase {
  * - CreateRouteUseCase'i enjekte eder
  * - GetRoutesByUserIdUseCase'i enjekte eder
  * - GetRouteDetailsUseCase'i enjekte eder
+ * - DeleteRouteUseCase'i enjekte eder
+ * - UpdateRouteNameUseCase'i enjekte eder
  * - PrismaClient'i enjekte eder
  * 
  * Dependency Chain:
@@ -233,6 +309,10 @@ function getGetRouteDetailsUseCase(): GetRouteDetailsUseCase {
  *   │   └─ getPrismaClient() (import'ı)
  *   ├─ getGetRouteDetailsUseCase()
  *   │   └─ getPrismaClient() (import'ı)
+ *   ├─ getDeleteRouteUseCase()
+ *   │   └─ getPrismaClient() (import'ı)
+ *   ├─ getUpdateRouteNameUseCase()
+ *   │   └─ getPrismaClient() (import'ı)
  *   └─ getPrismaClient() (import'ı)
  */
 function getRouteController(): RouteController {
@@ -243,6 +323,10 @@ function getRouteController(): RouteController {
     const getRoutesByUserIdUseCase = getGetRoutesByUserIdUseCase();
     // GetRouteDetailsUseCase'i getir
     const getRouteDetailsUseCase = getGetRouteDetailsUseCase();
+    // DeleteRouteUseCase'i getir
+    const deleteRouteUseCase = getDeleteRouteUseCase();
+    // UpdateRouteNameUseCase'i getir
+    const updateRouteNameUseCase = getUpdateRouteNameUseCase();
     // PrismaClient'i getir (database singleton'undan)
     const prismaClient = getPrismaClient();
     
@@ -251,6 +335,8 @@ function getRouteController(): RouteController {
       createRouteUseCase,
       getRoutesByUserIdUseCase,
       getRouteDetailsUseCase,
+      deleteRouteUseCase,
+      updateRouteNameUseCase,
       prismaClient
     );
   }
@@ -358,6 +444,102 @@ router.get('/:routeId', async (req, res) => {
   await controller.getRouteDetails(req, res);
 });
 
+// Rota 4: DELETE /:routeId
+// -------------------------
+// HTTP Method: DELETE
+// Path: /:routeId
+// Handler: getRouteController().deleteRoute
+//
+// AÇIKLAMA:
+// Verilen rota ID'sine ait rotayı silen endpoint.
+// Rota silindiğinde, ilişkili tüm Stop'lar Cascade Delete ile otomatik silinir.
+//
+// Neden DELETE metodu kullanıyoruz?
+// ------
+// 1. RESTful Prensibi: Kaynak silme işlemleri DELETE ile yapılır
+// 2. URL Path: Silinecek kaynağın ID'si URL path'inde yer alır
+// 3. Semantik Açıklık: DELETE, kaynağın silindiğini açıkça belirtir
+// 4. Idempotence: DELETE isteği birden fazla kez çağrılabilir (hatası hep aynı)
+//
+// Örnek İstek: DELETE /routes/clh456def789
+//
+// Yanıt Body: BOŞ (204 No Content)
+// - Response body yoktur
+// - Sadece HTTP 204 status kodu döndürülür
+//
+// HTTP Yanıt Kodları:
+// - 204 No Content: Rota başarıyla silindi (yanıt body'si boş)
+// - 404 Not Found: Rota veritabanında bulunamadı
+// - 400 Bad Request: Hatalı routeId parametresi veya DB hatası
+//
+// 🗑️ Cascade Delete İşlemi:
+// 1. Stop tablosundaki routeId = :routeId kayıtları silinir
+// 2. Route tablosundaki id = :routeId kaydı silinir
+// 3. İşlem otomatik ve atomiktir (transaction)
+// 4. Orphan Stop kayıtları kalması OLMAZ
+//
+// ⚡ LAZY INITIALIZATION HANDLER:
+router.delete('/:routeId', async (req, res) => {
+  const controller = getRouteController();
+  await controller.deleteRoute(req, res);
+});
+
+// Rota 5: PATCH /:routeId/rename
+// --------------------------------
+// HTTP Method: PATCH
+// Path: /:routeId/rename
+// Handler: getRouteController().updateRouteName
+//
+// AÇIKLAMA:
+// Verilen rota ID'sine ait rotanın başlığını (title) güncelleyen endpoint.
+// Bu işlem "rename" olarak adlandırılır, çünkü sadece title değiştirilir.
+//
+// Neden PATCH metodu kullanıyoruz?
+// ------
+// 1. RESTful Prensibi: Kısmi güncellemeler PATCH ile yapılır (PUT tam değişim)
+// 2. Partial Update: Sadece title alanı güncellenir, diğer alanlar korunur
+// 3. Sub-resource: /rename sub-resource'ı spesifik işlemi belirtir
+// 4. Semantik Açıklık: PATCH + /rename, başlık değişikliğini açıkça gösterir
+//
+// Örnek İstek: 
+// PATCH /routes/clh456def789/rename
+// Content-Type: application/json
+// {
+//   "newTitle": "Yeni Rota Adı"
+// }
+//
+// Yanıt: IRoute (Güncellenmiş rota bilgileri)
+// {
+//   id: "clh456def789",
+//   userId: "user-123",
+//   title: "Yeni Rota Adı",       ← Güncellenmiş
+//   city: "İstanbul",
+//   ...
+//   updatedAt: "2026-05-18T15:30:00Z"  ← Otomatik güncellendi
+// }
+//
+// Validasyon Kuralları (newTitle):
+// ✅ String tipinde olmalı
+// ✅ Boş olmamalı (empty string)
+// ✅ null veya undefined olmamalı
+// ✅ Sadece space'lerden oluşmamalı
+//
+// HTTP Yanıt Kodları:
+// - 200 OK: Rota başarıyla güncellendi + güncellenmiş rota JSON'ı
+// - 404 Not Found: Rota veritabanında bulunamadı
+// - 400 Bad Request: Validasyon hatası (newTitle geçersiz) veya hatalı routeId parametresi
+//
+// 💡 Partial Update Örneği:
+// PUT  /routes/:id    → Rota tamamen değiştirilir (PUT'a göre tüm alanlar gerekli)
+// PATCH /routes/:id   → Sadece verilen alanlar güncellenir
+// PATCH /routes/:id/rename → Sadece title güncellenebilir
+//
+// ⚡ LAZY INITIALIZATION HANDLER:
+router.patch('/:routeId/rename', async (req, res) => {
+  const controller = getRouteController();
+  await controller.updateRouteName(req, res);
+});
+
 /**
  * ============================================
  * ADIM 4: ROUTER'I DIŞA AKTAR
@@ -369,13 +551,23 @@ router.get('/:routeId', async (req, res) => {
  *   import routeRouter from './presentation/routes/route.js';
  *   app.use('/api', routeRouter);
  * 
- * Bu durumda endpoint: POST /api/generate
+ * Bu durumda endpoint'ler:
+ * - POST /api/generate
+ * - GET /api/user/:userId
+ * - GET /api/:routeId
+ * - DELETE /api/:routeId
+ * - PATCH /api/:routeId/rename
  * 
  * Ya da:
  * 
  *   app.use('/routes', routeRouter);
  * 
- * Bu durumda endpoint: POST /routes/generate
+ * Bu durumda endpoint'ler:
+ * - POST /routes/generate
+ * - GET /routes/user/:userId
+ * - GET /routes/:routeId
+ * - DELETE /routes/:routeId
+ * - PATCH /routes/:routeId/rename
  * 
  * Router'ın modüler olması, farklı yerlerde yeniden kullanımı kolaylaştırır.
  */
