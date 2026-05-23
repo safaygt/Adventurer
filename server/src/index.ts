@@ -146,24 +146,32 @@ app.use(express.json());
 
 // Route Bağlama
 // ----------------------------------
-// app.use('/api', routeRouter)
+// app.use('/api/routes', routeRouter)
 //
 // Bu satır ne yapıyor?
-// - '/api' path'i ile başlayan tüm istekler routeRouter'a yönlendirilir
+// - '/api/routes' path'i ile başlayan tüm istekler routeRouter'a yönlendirilir
 // - routeRouter içindeki 'POST /generate' ile birleşir
 //
 // Sonuç:
-// Endpoint: POST /api/generate
+// Endpoint: POST /api/routes/generate
 //
 // İstek örneği:
-// POST http://localhost:5000/api/generate
+// POST http://localhost:5000/api/routes/generate
 // Body: { city: "İstanbul", days: 3, budget: "STANDARD" }
 //
-// Neden '/api' prefix'i kullanıyoruz?
-// - API versiyonlanması: /api/v1, /api/v2 gibi versiyonlar eklenebilir
-// - Klasifikasyon: /api, /static, /admin gibi farklı yollar ayrılabilir
+// Frontend'deki routeService.ts'de de şöyle yazılı:
+// - POST /routes/generate (apiClient.post('/routes/generate', ...))
+// - GET /routes/user/:userId (apiClient.get(`/routes/user/${userId}`))
+// - GET /routes/:routeId (apiClient.get(`/routes/${routeId}`))
+// - DELETE /routes/:routeId (apiClient.delete(`/routes/${routeId}`))
+// - PATCH /routes/:routeId/rename (apiClient.patch(`/routes/${routeId}/rename`, ...))
+//
+// Neden '/api/routes' prefix'i kullanıyoruz?
+// - API versiyonlanması: /api/v1/routes, /api/v2/routes gibi versiyonlar eklenebilir
+// - Klasifikasyon: /api/routes, /api/users, /api/admin gibi farklı resourcelar
 // - Bakım ve ölçeklendirme: API rotaları daha organize olur
-app.use('/api', routeRouter);
+// - Frontend'in routes API'ye istek göndermesi için eşleşme sağlanır
+app.use('/api/routes', routeRouter);
 
 /**
  * ============================================

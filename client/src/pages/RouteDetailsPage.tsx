@@ -23,7 +23,7 @@ import {
   DollarSign,
   Tag,
 } from 'lucide-react';
-import type { IRoute } from '../types/index.js';
+
 import { BUDGET_TYPE_LABELS, BUDGET_TYPE_COLORS } from '../types/index.js';
 import RouteTimeline from '../components/RouteTimeline.js';
 import routeService from '../services/routeService.js';

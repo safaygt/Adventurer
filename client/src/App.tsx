@@ -34,6 +34,17 @@ const queryClient = new QueryClient({
  * App Bileşeni
  * 
  * Uygulamanın route'larını ve provider'larını tanımlar.
+ * 
+ * ⚠️ ÖNEMLI: Route Order (Rota Sırası)
+ * React Router'da statik route'lar dinamik route'lardan ÖNCE gel melidir!
+ * Aksi halde, `/routes/create` isteği `/routes/:routeId` ile eşleşir
+ * ve "create" routeId olarak kabul edilir.
+ * 
+ * Doğru Sıra:
+ * 1. /routes/create    ← Statik (tam eşleş)
+ * 2. /routes/:routeId  ← Dinamik (parametre)
+ * 3. /                 ← Varsayılan
+ * 4. *                 ← Joker (herhangi)
  */
 function App() {
   return (
@@ -43,7 +54,11 @@ function App() {
           {/* Ana Sayfa - Rotalarım */}
           <Route path="/routes" element={<RoutesPage />} />
 
-          {/* Rota Detay Sayfası */}
+          {/* Rota Oluşturma Sayfası - MEVCUT DEĞİL (geçici olarak RoutesPage'e yönlendir) */}
+          {/* TODO: CreateRoutePage component'i oluşturulmalı */}
+          <Route path="/routes/create" element={<RoutesPage />} />
+
+          {/* Rota Detay Sayfası - Dinamik rota (statik route'lardan sonra) */}
           <Route path="/routes/:routeId" element={<RouteDetailsPage />} />
 
           {/* Default Route - Başlangıç Sayfasına Yönlendir */}
